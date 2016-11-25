@@ -30,8 +30,11 @@ by Philip Housel
 */
 
 // constants won't change. Used here to set a pin numbers, etc :
-const int compRelayPin =  11;  // the number of the pin for the compressor relay
 const int heartbeatPin = 13;  // pin for heartbeat LED
+const int compRelayPin =  11;  // the number of the pin for the compressor relay
+const int compRelayPin =  10;  // the number of the pin for the low fan relay
+const int compRelayPin =  9;  // the number of the pin for the med fan relay
+const int compRelayPin =  8;  // the number of the pin for the high fan relay
 const int heartbeatOnTime = 100;  // milliseconds on for heartbeat LED
 const int heartbeatOffTime = 1900;  // milliseconds off for heartbeat LED
 const int evapPin = 0;  // analog pin for the evaporator temp sensor
