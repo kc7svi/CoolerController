@@ -31,16 +31,14 @@ by Philip Housel
 
 // constants won't change. Used here to set a pin numbers, etc :
 const int heartbeatPin = 13;  // pin for heartbeat LED
-const int compRelayPin =  11;  // the number of the pin for the compressor relay
-const int compRelayPin =  10;  // the number of the pin for the low fan relay
-const int compRelayPin =  9;  // the number of the pin for the med fan relay
-const int compRelayPin =  8;  // the number of the pin for the high fan relay
+const int compPin =  11;  // the number of the pin for the compressor relay
+const int fanLowPin =  10;  // the number of the pin for the low fan relay
+const int fanMedPin =  9;  // the number of the pin for the med fan relay
+const int fanHighPin =  8;  // the number of the pin for the high fan relay
+const int evapThermPin = 0;  // analog pin for the evaporator temp sensor
+const int roomThermPin = 1;  // analog pin for the room temp sensor
 const int heartbeatOnTime = 100;  // milliseconds on for heartbeat LED
 const int heartbeatOffTime = 1900;  // milliseconds off for heartbeat LED
-const int evapPin = 0;  // analog pin for the evaporator temp sensor
-const int evapSampleRate = 200;  // milliseconds for ADC evap temp sample
-const int roomPin = 1;  // analog pin for the room temp sensor
-const int roomSampleRate = 200;  // milliseconds for ADC room temp sample
 
 
 int valueLR = 1;
@@ -54,33 +52,6 @@ int compMinOffTime = 30;  // the minimum seconds the compressor must be off befo
 int compRunTimeOn = 0;
 int compRunTimeOff = 0;
 
-long int evapAverage = 678;  //Set ADC value to 50F
-int evapSample01 = 678;
-int evapSample02 = 678;
-int evapSample03 = 678;
-int evapSample04 = 678;
-int evapSample05 = 678;
-int evapSample06 = 678;
-int evapSample07 = 678;
-int evapSample08 = 678;
-int evapSample09 = 678;
-int evapSample10 = 678;
-double evapResistance = 0;
-double evapDegF = 0.0;
-
-long int roomAverage =  678;    //Set ADC value to 50F
-int roomSample01 = 678;
-int roomSample02 = 678;
-int roomSample03 = 678;
-int roomSample04 = 678;
-int roomSample05 = 678;
-int roomSample06 = 678;
-int roomSample07 = 678;
-int roomSample08 = 678;
-int roomSample09 = 678;
-int roomSample10 = 678;
-double roomResistance = 0;
-double roomDegF = 0.0;
 
 unsigned long previousHeartbeatMillis = 0;        // will store last time heartbeat changed
 int heartbeatState = LOW;
@@ -95,7 +66,10 @@ void setup() {
   Serial.begin(9600);
   // set the digital pin as output:
   pinMode(heartbeatPin, OUTPUT);
-  pinMode(compRelayPin, OUTPUT);
+  pinMode(compPin, OUTPUT);
+  pinMode(fanLowPin, OUTPUT);
+  pinMode(fanMedPin, OUTPUT);
+  pinMode(fanHighPin, OUTPUT);
   analogReference(EXTERNAL)
   // set up the LCD's number of columns and rows: 
   lcd.begin(16, 2);
@@ -107,22 +81,9 @@ void setup() {
 
 uint8_t i=0;
 void loop() {
-  // heartbeat LED
   unsigned long currentMillis = millis();
-  
-  if ( (heartbeatState == HIGH) && (currentMillis - previousHeartbeatMillis >= heartbeatOnTime) ) {
-    heartbeatState = LOW;  // Turn it off
-    previousHeartbeatMillis = currentMillis;  // Remember the time
-    digitalWrite(heartbeatPin, heartbeatState);  // Update the actual LED
-    // Serial.println("Heartbeat");
-  }
-  else if ( (heartbeatState == LOW) && (currentMillis - previousHeartbeatMillis >= heartbeatOffTime) ) {
-    heartbeatState = HIGH;  // turn it on
-    previousHeartbeatMillis = currentMillis;   // Remember the time
-    digitalWrite(heartbeatPin, heartbeatState);   // Update the actual LED
-  }
+  heartBeat();
   // evap temp sample
-//  currentMillis = millis();
   
   if(currentMillis - previousEvapMillis >= evapSampleRate) {
     previousEvapMillis = currentMillis;    // Remember the time
@@ -311,4 +272,18 @@ void loop() {
   }
 }
 
+void heartBeat() {
+  // heartbeat LED
+  if ( (heartbeatState == HIGH) && (currentMillis - previousHeartbeatMillis >= 900) ) {
+    heartbeatState = LOW;  // Turn it off
+    previousHeartbeatMillis = currentMillis;  // Remember the time
+    digitalWrite(heartbeatPin, heartbeatState);  // Update the actual LED
+    // Serial.println("Heartbeat");
+  }
+  else if ( (heartbeatState == LOW) && (currentMillis - previousHeartbeatMillis >= 100) ) {
+    heartbeatState = HIGH;  // turn it on
+    previousHeartbeatMillis = currentMillis;   // Remember the time
+    digitalWrite(heartbeatPin, heartbeatState);   // Update the actual LED
+  }
 
+}
