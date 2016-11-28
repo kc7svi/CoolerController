@@ -30,3 +30,5 @@ Pin 13 - Heatbeat LED onboard
 
 16x2 LCD and buttons on I2C board
 https://www.adafruit.com/products/772
+
+used in part code from: https://github.com/EasternStarGeek/Fun-with-Thermistors to read thermistors
