@@ -40,7 +40,6 @@ const int roomThermPin = 1;  // analog pin for the room temp sensor
 const int heartbeatOnTime = 100;  // milliseconds on for heartbeat LED
 const int heartbeatOffTime = 1900;  // milliseconds off for heartbeat LED
 
-
 int valueLR = 1;
 int valueTB = 0;
 int roomSetHigh = 40;
@@ -49,18 +48,25 @@ int evapSetHigh = 33;
 int evapSetLow = 24;
 int compMinOnTime = 30;  // the minimum seconds the compressor must run before cycling off
 int compMinOffTime = 30;  // the minimum seconds the compressor must be off before cycling on
-int compRunTimeOn = 0;
-int compRunTimeOff = 0;
+int compTimeOn = 0;
+int compTimeOff = 0;
 
 
-unsigned long previousHeartbeatMillis = 0;        // will store last time heartbeat changed
+unsigned long prevHeartbeatMillis = 0;        // will store last time heartbeat changed
 int heartbeatState = LOW;
-int compRelayState = LOW;
-unsigned long previousEvapMillis = 0;        // will store last time evap temp sampled
-unsigned long previousRoomMillis = 0;        // will store last time room temp sampled
-unsigned long previousButtonMillis = 0;        // will store last time button was pressed
-unsigned long previousCompMillis = 0;        // will store last time comp was off
-
+int compState = LOW;
+int fanState = 0;
+unsigned long prevButtonMillis = 0;        // will store last time button was pressed
+unsigned long prevCompMillis = 0;        // will store last time comp was off
+unsigned long prevThermMillis = 0;        // will store last time thermistor was read
+float evapTempC;
+float evapTemp;
+float avgEvapTemp;
+float roomTempC;
+float roomTemp;
+float avgRoomTemp;
+boolean initEvapLPF = 1;  // Flag used to initialize the Low Pass Filter
+boolean initRoomLPF = 1;  // Flag used to initialize the Low Pass Filter
 
 void setup() {
   Serial.begin(9600);
@@ -83,70 +89,18 @@ uint8_t i=0;
 void loop() {
   unsigned long currentMillis = millis();
   heartBeat();
-  // evap temp sample
-  
-  if(currentMillis - previousEvapMillis >= evapSampleRate) {
-    previousEvapMillis = currentMillis;    // Remember the time
-    evapSample10 = evapSample09;
-    evapSample09 = evapSample08;
-    evapSample08 = evapSample07;
-    evapSample07 = evapSample06;
-    evapSample06 = evapSample05;
-    evapSample05 = evapSample04;
-    evapSample04 = evapSample03;
-    evapSample03 = evapSample02;
-    evapSample02 = evapSample01;
-    evapSample01 = analogRead(evapPin);
-    evapAverage = (evapSample01 + evapSample02 + evapSample03 + evapSample04 + evapSample05 + evapSample06 + evapSample07 + evapSample08 + evapSample09 + evapSample10)/10;
-    // convert to resistance
-    evapResistance = 10000.0 / ((1023.0 / evapAverage) - 1.0);
-    // convert to degrees F
-    evapDegF = evapResistance / 10000.0; //(R/Ro)
-    evapDegF = log(evapDegF); // ln(R/Ro)
-    evapDegF *= 0.000253; // 1/B * ln(R/Ro)
-    evapDegF += .003354; // + (1/To)
-    evapDegF = 1.0 / evapDegF; // Invert
-    evapDegF -= 274.95; // Deg C with 1.8 offset tested in ice water
-    evapDegF = (evapDegF * 1.8) + 32; // Deg F    lcd.setCursor(0, 0);
-  }
-  
-  // room temp sample
-//  currentMillis = millis();
-  
-  if(currentMillis - previousRoomMillis >= roomSampleRate) {
-    previousRoomMillis = currentMillis;    // Remember the time
-    roomSample10 = roomSample09;
-    roomSample09 = roomSample08;
-    roomSample08 = roomSample07;
-    roomSample07 = roomSample06;
-    roomSample06 = roomSample05;
-    roomSample05 = roomSample04;
-    roomSample04 = roomSample03;
-    roomSample03 = roomSample02;
-    roomSample02 = roomSample01;
-    roomSample01 = analogRead(roomPin);
-    roomAverage = (roomSample01 + roomSample02 + roomSample03 + roomSample04 + roomSample05 + roomSample06 + roomSample07 + roomSample08 + roomSample09 + roomSample10)/10;
-    Serial.println("room");
-    Serial.print("ADC: ");
-    Serial.println(roomAverage);
-    // convert to resistance
-    roomResistance = 10000.0 / ((1023.0 / roomAverage) - 1.0);
-    Serial.print("Res: ");
-    Serial.println(roomResistance);
-    // convert to degrees F
-    roomDegF = roomResistance / 10000.0; //(R/Ro)
-    roomDegF = log(roomDegF); // ln(R/Ro)
-    roomDegF *= 0.000253; // 1/B * ln(R/Ro)
-    roomDegF += .003354; // + (1/To)
-    roomDegF = 1.0 / roomDegF; // Invert
-    roomDegF -= 274.95; // Deg C with 1.8 offset tested in ice water
-    roomDegF = (roomDegF * 1.8) + 32; // Deg F
-    Serial.print(roomDegF);
-    Serial.println(" to Deg F");
-    Serial.println();
-  }
 
-//  currentMillis = millis();
+  if(currentMillis - prevThermMillis >= 100) {
+    prevThermMillis = currentMillis;    // Remember the time
+    evapTempC = getTempFloat(evapThermPin);
+    evapTemp = (evapTempC * 1.8) + 32;
+    roomTempC = getTempFloat(roomThermPin);
+    roomTemp = (roomTempC * 1.8) + 32;
+    avgEvapTemp = LPF(evapTemp,50,initEvapLPF,evapThermPin);
+    initEvapLPF = 0;
+    avgRoomTemp = LPF(roomTemp,50,initRoomLPF,evapThermPin);
+    initRoomLPF = 0;
+  }
   
   uint8_t buttons = lcd.readButtons();
   
@@ -161,7 +115,7 @@ void loop() {
       }
       
       if (buttons & BUTTON_RIGHT) {
-        if (valueLR < 6) {
+        if (valueLR < 8) {
           valueLR += 1;
         }
       }
@@ -183,6 +137,16 @@ void loop() {
   
   switch (valueLR) {
     case 1:
+      // Default Display
+      lcd.setCursor(0, 0);
+      lcd.print("Room ");
+      lcd.print(avgRoomTemp);
+      lcd.print("F        ");      
+      lcd.setCursor(0, 1);
+      lcd.print("Evap ");
+      lcd.print(avgEvapTemp);
+      lcd.print("F        ");      
+    case 2:
       // Room Temp High
       lcd.setCursor(0, 0);
       lcd.print("Room ");
@@ -193,7 +157,7 @@ void loop() {
       lcd.print(roomSetHigh);
       lcd.print("F");
       break;
-    case 2:
+    case 3:
       // Room Temp Low
       lcd.setCursor(0, 0);
       lcd.print("Room ");
@@ -204,7 +168,7 @@ void loop() {
       lcd.print(roomSetLow);
       lcd.print("F");
       break;
-    case 3:
+    case 4:
       // Evap Temp High
       lcd.setCursor(0, 0);
       lcd.print("Evap ");
@@ -215,7 +179,7 @@ void loop() {
       lcd.print(evapSetHigh);
       lcd.print("F");
       break;    
-    case 4:
+    case 5:
       // Evap Temp Low
       lcd.setCursor(0, 0);
       lcd.print("Evap ");
@@ -226,7 +190,7 @@ void loop() {
       lcd.print(evapSetLow);
       lcd.print("F");
       break;
-    case 5:
+    case 6:
       // Comp On Time
       lcd.setCursor(0, 0);
       lcd.print("Comp ");
@@ -237,7 +201,7 @@ void loop() {
       lcd.print(compMinOnTime);
       lcd.print("Sec");
       break;
-    case 6:
+    case 7:
       // Comp Off Time
       lcd.setCursor(0, 0);
       lcd.print("Comp ");
@@ -248,42 +212,202 @@ void loop() {
       lcd.print(compMinOffTime);
       lcd.print("Sec");
       break;
+    case 8:
+      // Set evap fan when room cool
+      
   }
 
-  if (roomDegF > roomSetHigh) {
-    if (evapDegF > evapSetHigh) {
-      if ((compRelayState == LOW) && (currentMillis - previousCompMillis >= (compMinOffTime * 1000))) {
-        compRelayState == HIGH;
-        digitalWrite(compRelayPin, compRelayState);
+  if (avgRoomTemp > roomSetHigh) { // if room is warm
+    if (avgEvapTemp > evapSetHigh) { // if evap is thawed
+      if ((compState == LOW) && (currentMillis - prevCompOffMillis >= (compMinOffTime * 1000))) { // if comp off and has been long enough
+        prevCompOffMillis = currentMillis;
+        compState = HIGH; // turn on compressor
+        fanState = 3; // turn evap fan to high
+        digitalWrite(compPin, compState);
       }
     }
-    else if (evapDegF < evapSetLow) {
-      if ((compRelayState == HIGH) && (currentMillis - previousCompMillis >= (compMinOnTime * 1000))) {
-        compRelayState == LOW;
-        digitalWrite(compRelayPin, compRelayState);
+    else if (avgEvapTemp < evapSetLow) { // if evap frozen
+      if ((compState == HIGH) && (currentMillis - prevCompOnMillis >= (compMinOnTime * 1000))) { // if comp on and has been long enough
+        prevCompOnMillis = currentMillis
+        compState = LOW; // turn off compressor
+        fanState = 3; // turn evap fan to high
+        digitalWrite(compPin, compState);
       }
     }     
   }
-  else if (roomDegF < roomSetLow) {
-    if ((compRelayState == HIGH) && (currentMillis - previousCompMillis >= (compMinOnTime * 1000))) {
-      compRelayState == LOW;
-      digitalWrite(compRelayPin, compRelayState);
+  else if (avgRoomTemp < roomSetLow) {
+    if ((compState == HIGH) && (currentMillis - previCompOnMillis >= (compMinOnTime * 1000))) { // if comp on and has been long enough
+      prevCompOnMillis = currentMillis
+      compState = LOW; // turn off compressor
+      fanState = 1; // turn evap fan to low
+      digitalWrite(compPin, compState);
     }
+  }
+  switch(fanState) {
+    case 0:
+      // evap fan off
+      digitalWrite(fanHighPin, LOW);
+      digitalWrite(fanMedPin, LOW);
+      digitalWrite(fanLowPin, LOW);      
+      break;    
+    case 1:
+      // evap fan low
+      digitalWrite(fanHighPin, LOW);
+      digitalWrite(fanMedPin, LOW);
+      digitalWrite(fanLowPin, HIGH);      
+      break;
+    case 2:
+      // evap fan med
+      digitalWrite(fanHighPin, LOW);
+      digitalWrite(fanLowPin, LOW);      
+      digitalWrite(fanMedPin, HIGH);
+      break;
+    case 3:
+      // evap fan high
+      digitalWrite(fanMedPin, LOW);
+      digitalWrite(fanLowPin, LOW);      
+      digitalWrite(fanHighPin, HIGH);
+      break;
+    default:
+      // evap fan high
+      digitalWrite(fanMedPin, LOW);
+      digitalWrite(fanLowPin, LOW);      
+      digitalWrite(fanHighPin, HIGH);
+      break;    
   }
 }
 
 void heartBeat() {
   // heartbeat LED
-  if ( (heartbeatState == HIGH) && (currentMillis - previousHeartbeatMillis >= 900) ) {
+  if ( (heartbeatState == HIGH) && (currentMillis - prevHeartbeatMillis >= 900) ) {
     heartbeatState = LOW;  // Turn it off
-    previousHeartbeatMillis = currentMillis;  // Remember the time
+    prevHeartbeatMillis = currentMillis;  // Remember the time
     digitalWrite(heartbeatPin, heartbeatState);  // Update the actual LED
-    // Serial.println("Heartbeat");
   }
-  else if ( (heartbeatState == LOW) && (currentMillis - previousHeartbeatMillis >= 100) ) {
+  else if ( (heartbeatState == LOW) && (currentMillis - prevHeartbeatMillis >= 100) ) {
     heartbeatState = HIGH;  // turn it on
-    previousHeartbeatMillis = currentMillis;   // Remember the time
+    prevHeartbeatMillis = currentMillis;   // Remember the time
     digitalWrite(heartbeatPin, heartbeatState);   // Update the actual LED
   }
 
 }
+
+float getTempFloat (int thermPin)  {
+
+  /*
+  This function converts a Thermistor reading into a corresponding temperature in degrees C.
+  
+   The Thermistor is incorporated into a Voltage Divider Circuit with Ra=Thermistor and Rb=10K,
+   ASCII circuit diagram, below:
+   
+   +Vref---[Thermistor]---+--[10K]---GND
+                          |
+                         ADC @ thermPin
+   
+   ADC Values were externally calculated from the Thermistor Resistance Table
+   using the formula:   ADC = 1023 * 10000/(Rtherm+10000)
+   
+   (ADC: Analog to Digital Converter)
+   
+   The lookup table, below, is an array of integer constants containing 
+   the predicted ADC values for all temperatures between -20 deg C to + 69 deg C.
+   The array index starts at zero, which corresponds to a temperature of -20 deg C.
+   
+   The resolution of the LUT itself is 1 degree C, but because there is some difference 
+   between adjacent ADC values, in some cases more than 10 counts, a linear interpolation 
+   between the two closest entries is performed to give a finer output resolution.
+   */
+   
+  const int LUT_Therm[90] = {
+    105, 110, 116, 121, 127, 133, 139, 145, 152, 159,   // -20C to -11C 
+    165, 173, 180, 187, 195, 203, 211, 219, 227, 236,   // -10C to -1C 
+    245, 254, 264, 273, 283, 293, 303, 313, 324, 334,   //  0C  to +9C 
+    345, 355, 366, 377, 388, 399, 410, 422, 433, 444,   //  10C to 19C 
+    455, 467, 478, 489, 500, 512, 523, 534, 545, 555,   //  20C to 29C 
+    566, 577, 588, 598, 608, 619, 629, 639, 648, 658,   //  30C to 39C 
+    667, 677, 686, 695, 704, 712, 721, 729, 737, 745,   //  40C to 49C 
+    753, 760, 768, 775, 782, 789, 795, 802, 808, 814,   //  50C to 59C 
+    820, 826, 832, 837, 843, 848, 853, 858, 863, 867    //  60C to 69C 
+  };
+
+  float _tempC;  // Intermediate results and final Temperature return value
+  int ADC_Lo;   // The Lower ADC matching value
+  int ADC_Hi;   // The Higher ADC matching value
+  int Temp_Lo;  // The Lower whole-number matching temperature
+  int Temp_Hi;  // The Higher whole-number matching temperature
+
+  // get raw ADC value from Thermistor voltage divider circuit
+  int thermValue = analogRead(thermPin);
+
+  // Return dummy value if the sensor reading falls outside of the LUT
+  if (thermValue < LUT_Therm[0]) 
+    _tempC = -999;  // Under-range dummy value
+  else if (thermValue > LUT_Therm[89])
+    _tempC = 999;  // Over-range dummy value
+  else {
+
+    // if Sensor Value is within range...
+    for (int i=0; i <= 89; i++){    // Step through the lookup table and look for a match
+      if (LUT_Therm[i] > thermValue) {  // Find the closest Higher ADC value
+        ADC_Hi = LUT_Therm[i];
+        Temp_Hi = i - 20;      // Record the closest Higher whole-number temperature
+
+        // Get the closest Lower whole-number temperature, taking the lower table boundary into account
+        if (i != 0)  {
+          ADC_Lo = LUT_Therm[i-1];
+          Temp_Lo = i - 21;
+        }
+        else  {
+          ADC_Lo = LUT_Therm[i];
+          Temp_Lo = i - 20;
+        }
+
+        // Interpolate the temperature value for greater precision
+        // Note: the Map function does not use floating-point math, so the integer values
+        // of temperature are multiplied by 100, and the result is subsequently divided by 100
+        _tempC = float( map(thermValue, ADC_Lo, ADC_Hi, Temp_Lo*100, Temp_Hi*100) )/100;
+         break;  // exit for-next loop after the match is detected
+      }
+    }
+  }
+  return (_tempC);
+}
+
+float LPF(float input, int bufferSize, boolean initialize, int thermPin)  {
+
+#define bufferCap 50  //maximum buffer capacity
+
+  static float buffer[bufferCap][thermPin];
+  byte samples;
+  float tempSum;
+  float output;
+
+  bufferSize = constrain(bufferSize, 2, bufferCap);
+
+  // Initialize buffer if requested
+  if (initialize) {
+    for ( int i=0; i < bufferSize; i++ ) {
+      buffer[i][thermPin] = input;
+    } // END For
+  }  // END if
+
+  // Push down the buffer Stack to discard oldest reading, making room for the new
+  for ( int i=bufferSize - 2; i >= 0; i--) {
+    buffer[i+1] = buffer[i][thermPin];
+  } // END For
+
+  // Record the Current input value
+  buffer[0][thermPin] = input;
+
+  // Calculate current stack average
+  tempSum = 0;
+  for ( int i=0; i < bufferSize; i++ ) {
+    tempSum = tempSum + buffer[i][thermPin];
+  } // END For
+
+  output = tempSum / bufferSize;
+
+  return(output);
+
+
+} // End Room function
