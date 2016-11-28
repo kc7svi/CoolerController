@@ -96,6 +96,7 @@ void setup() {
   // set the digital pin as output:
   pinMode(heartbeatPin, OUTPUT);
   pinMode(compRelayPin, OUTPUT);
+  analogReference(EXTERNAL)
   // set up the LCD's number of columns and rows: 
   lcd.begin(16, 2);
   lcd.setBacklight(0x1); // Turn on backlight
