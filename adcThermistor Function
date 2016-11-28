@@ -1,0 +1,10 @@
+
+    resistance = 10000.0 / ((1023.0 / adcReading) - 1.0);
+    // convert to degrees F
+    evapDegF = evapResistance / 10000.0; //(R/Ro)
+    evapDegF = log(evapDegF); // ln(R/Ro)
+    evapDegF *= 0.000253; // 1/B * ln(R/Ro)
+    evapDegF += .003354; // + (1/To)
+    evapDegF = 1.0 / evapDegF; // Invert
+    evapDegF -= 274.95; // Deg C with 1.8 offset tested in ice water
+    evapDegF = (evapDegF * 1.8) + 32; // Deg F    lcd.setCursor(0, 0);
