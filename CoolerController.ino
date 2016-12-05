@@ -1,6 +1,8 @@
 // Library for math
 #include <math.h>
 
+#include <EEPROM.h>
+
 // Libraries for LCD
 #include <Wire.h>
 #include <Adafruit_MCP23017.h>
@@ -40,14 +42,28 @@ const int roomThermPin = 1;  // analog pin for the room temp sensor
 const int heartbeatOnTime = 100;  // milliseconds on for heartbeat LED
 const int heartbeatOffTime = 1900;  // milliseconds off for heartbeat LED
 
+// min and max values
+const int minRoom = 32;
+const int maxRoom = 60;
+const int minEvap = 10;
+const int maxEvap = 40;
+const int minComp = 5;
+const int maxComp = 180;
+const int minFan = 0;
+const int maxFan = 3;
+
+
+
 int valueLR = 1;
 int valueTB = 0;
-int roomSetHigh = 40;
-int roomSetLow = 38;
-int evapSetHigh = 33;
-int evapSetLow = 24;
-int compMinOnTime = 30;  // the minimum seconds the compressor must run before cycling off
-int compMinOffTime = 30;  // the minimum seconds the compressor must be off before cycling on
+int roomSetHigh; // declare
+int roomSetLow; // declare
+int evapSetHigh; // declare
+int evapSetLow; // declare
+unsigned long compMinOnTime; // declare
+unsigned long compMinOffTime; // declare
+int fanState; // declare
+int fanIdleSpeed; // declare
 int compOnTime = 0;
 int compOffTime = 0;
 
@@ -55,7 +71,6 @@ int compOffTime = 0;
 unsigned long prevHeartbeatMillis = 0;        // will store last time heartbeat changed
 int heartbeatState = LOW;
 int compState = LOW;
-int fanState = 3;
 unsigned long prevButtonMillis = 0;        // will store last time button was pressed
 unsigned long prevCompOnMillis = 0;        // will store last time comp was off
 unsigned long prevCompOffMillis = 0;        // will store last time comp was off
@@ -83,14 +98,55 @@ void setup() {
   lcd.begin(16, 2);
   lcd.setBacklight(0x1); // Turn on backlight
   lcd.print("Hello Dave!");
-  delay(5000);
+  delay(2000);
   lcd.clear();
+  lcd.print("Loading Settings");
+  delay(2000);
+  lcd.clear();
+  EEPROM.get(0,roomSetHigh);
+  EEPROM.get(2,roomSetLow);
+  EEPROM.get(4,evapSetHigh);
+  EEPROM.get(6,evapSetLow);
+  EEPROM.get(8,compMinOnTime);
+  EEPROM.get(12,compMinOffTime);
+  EEPROM.get(16,fanIdleSpeed);
+  Serial.println(roomSetHigh);
+  Serial.println(roomSetLow);
+  Serial.println(evapSetHigh);
+  Serial.println(evapSetLow);
+  Serial.println(compMinOnTime);
+  Serial.println(compMinOffTime);
+  Serial.println(fanIdleSpeed);
+  if((roomSetHigh>=minRoom)&&(roomSetHigh<=maxRoom)&&(roomSetLow>=minRoom)&&(roomSetLow<=maxRoom)&&(evapSetHigh>=minEvap)&&(evapSetHigh<=maxEvap)&&(evapSetLow>=minEvap)&&(evapSetLow<=maxEvap)&&(compMinOnTime>=minComp)&&(compMinOnTime<=maxComp)&&(compMinOffTime>=minComp)&&(compMinOffTime<=maxComp)&&(fanIdleSpeed>=minFan)&&(fanIdleSpeed<=maxFan)){
+    lcd.setCursor(0, 0);
+    lcd.print("Settings Loaded");
+    lcd.setCursor(0, 1);
+    lcd.print("Successfully");
+    //fanIdleSpeed=6; //error value for testing
+    delay(2000);
+    lcd.clear();
+  } else {
+    lcd.setCursor(0, 0);
+    lcd.print("Error Detected!");
+    lcd.setCursor(0, 1);
+    lcd.print("Loading Defaults");
+    delay(2000);
+    lcd.clear();
+    //load default safe values
+    roomSetHigh = 40;
+    roomSetLow = 38;
+    evapSetHigh = 33;
+    evapSetLow = 24;
+    compMinOnTime = 30;  // the minimum seconds the compressor must run before cycling off
+    compMinOffTime = 30;
+    fanIdleSpeed = 3;
+  }
   
 }
 
 uint8_t i=0;
 void loop() {
-  unsigned long currentMillis = millis();
+  currentMillis = millis();
   heartBeat();
 
   if(currentMillis - prevThermMillis >= 100) {
@@ -101,7 +157,7 @@ void loop() {
     roomTemp = (roomTempC * 1.8) + 32;
     avgEvapTemp = LPF(evapTemp,50,initEvapLPF,evapThermPin);
     initEvapLPF = 0;
-    avgRoomTemp = LPF(roomTemp,50,initRoomLPF,evapThermPin);
+    avgRoomTemp = LPF(roomTemp,50,initRoomLPF,roomThermPin);
     initRoomLPF = 0;
   }
   
@@ -113,33 +169,69 @@ void loop() {
       
       if (buttons & BUTTON_LEFT) {
         if (valueLR > 1) {
-          valueLR -= 1;
+          valueLR --;
         }
       }
       
       if (buttons & BUTTON_RIGHT) {
         if (valueLR < 8) {
-          valueLR += 1;
+          valueLR ++;
         }
       }
       
       if (buttons & BUTTON_UP) {
-        valueTB += 1;
+        valueTB ++;
       }
 
       if (buttons & BUTTON_DOWN) {
-        valueTB -= 1;
+        valueTB --;
       }
       
       if (buttons & BUTTON_SELECT) {
+        Serial.println(roomSetHigh);
+        Serial.println(roomSetLow);
+        Serial.println(evapSetHigh);
+        Serial.println(evapSetLow);
+        Serial.println(compMinOnTime);
+        Serial.println(compMinOffTime);
+        Serial.println(fanIdleSpeed);
+        if((roomSetHigh>=minRoom)&&(roomSetHigh<=maxRoom)&&(roomSetLow>=minRoom)&&(roomSetLow<=maxRoom)&&(evapSetHigh>=minEvap)&&(evapSetHigh<=maxEvap)&&(evapSetLow>=minEvap)&&(evapSetLow<=maxEvap)&&(compMinOnTime>=minComp)&&(compMinOnTime<=maxComp)&&(compMinOffTime>=minComp)&&(compMinOffTime<=maxComp)&&(fanIdleSpeed>=minFan)&&(fanIdleSpeed<=maxFan)){
+          //Save to EEPROM
+          lcd.clear();
+          lcd.print("Saving Settings");
+          delay(2000);
+          EEPROM.put(0,roomSetHigh);
+          EEPROM.put(2,roomSetLow);
+          EEPROM.put(4,evapSetHigh);
+          EEPROM.put(6,evapSetLow);
+          EEPROM.put(8,compMinOnTime);
+          EEPROM.put(12,compMinOffTime);
+          EEPROM.put(16,fanIdleSpeed);
+          lcd.clear();
+          lcd.print("Settings Saved");
+          lcd.setCursor(0, 1);
+          lcd.print("Successfully");
+          delay(2000); 
+        } else {
+          lcd.clear();
+          lcd.print("ERROR ERROR");
+          lcd.setCursor(0, 1);
+          lcd.print("I'm Sorry Dave");
+          delay(2000);  
+          lcd.clear();
+          lcd.print("I'm Afraid");
+          lcd.setCursor(0, 1);
+          lcd.print("I Can't Do That");
+          delay(2000);  
+        }
         // lcd.print("SELECT ");
         //    lcd.print(lcdTop);
       }
     }
   }
-  Serial.print(valueLR);
-  Serial.print(" ");
-  Serial.println(valueTB);
+  //Serial.print(valueLR);
+  //Serial.print(" ");
+  //Serial.println(valueTB);
   switch (valueLR) {
     case 1:
       // Default Display
@@ -264,18 +356,18 @@ void loop() {
       break;
     case 8:
       // Idle Fan Speed 
-      if ((fanState > 0) && (valueTB < 0)){
-        fanState = fanState + valueTB;
+      if ((fanIdleSpeed > 0) && (valueTB < 0)){
+        fanIdleSpeed = fanIdleSpeed + valueTB;
         valueTB = 0;
-      } else if ((fanState < 3) && (valueTB > 0)){
-        fanState = fanState + valueTB;
+      } else if ((fanIdleSpeed < 3) && (valueTB > 0)){
+        fanIdleSpeed = fanIdleSpeed + valueTB;
         valueTB = 0;        
       }
       lcd.setCursor(0, 0);
       lcd.print("Fan Idle Speed  ");
       lcd.setCursor(0, 1);
       lcd.print("Speed ");
-      switch(fanState) {
+      switch(fanIdleSpeed) {
         case 0:
           lcd.print("Off");
           break;
@@ -300,26 +392,28 @@ void loop() {
         prevCompOffMillis = currentMillis;
         compState = HIGH; // turn on compressor
         fanState = 3; // turn evap fan to high
-        digitalWrite(compPin, compState);
       }
-    }
-    else if (avgEvapTemp < evapSetLow) { // if evap frozen
+    } else if (avgEvapTemp < evapSetLow) { // if evap frozen
       if ((compState == HIGH) && (currentMillis - prevCompOnMillis >= (compMinOnTime * 1000))) { // if comp on and has been long enough
         prevCompOnMillis = currentMillis;
         compState = LOW; // turn off compressor
         fanState = 3; // turn evap fan to high
-        digitalWrite(compPin, compState);
       }
     }     
-  }
-  else if (avgRoomTemp < roomSetLow) {
+  } else if (avgRoomTemp < roomSetLow) { // if room is cold
     if ((compState == HIGH) && (currentMillis - prevCompOnMillis >= (compMinOnTime * 1000))) { // if comp on and has been long enough
       prevCompOnMillis = currentMillis;
       compState = LOW; // turn off compressor
-      fanState = 1; // turn evap fan to low
-      digitalWrite(compPin, compState);
+      fanState = fanIdleSpeed; // turn evap fan to idle speed
+    }
+  } else if (avgEvapTemp < evapSetLow) { // if evap frozen
+    if ((compState == HIGH) && (currentMillis - prevCompOnMillis >= (compMinOnTime * 1000))) { // if comp on and has been long enough
+      prevCompOnMillis = currentMillis;
+      compState = LOW; // turn off compressor
+      fanState = 3; // turn evap fan to high
     }
   }
+  digitalWrite(compPin, compState); // set compressor relay pin
   switch(fanState) {
     case 0:
       // evap fan off
@@ -415,6 +509,7 @@ float getTempFloat (int thermPin)  {
 
   // get raw ADC value from Thermistor voltage divider circuit
   int thermValue = analogRead(thermPin);
+  thermValue = 1024 - thermValue;
 
   // Return dummy value if the sensor reading falls outside of the LUT
   if (thermValue < LUT_Therm[0]) 
