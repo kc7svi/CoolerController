@@ -55,7 +55,7 @@ int compOffTime = 0;
 unsigned long prevHeartbeatMillis = 0;        // will store last time heartbeat changed
 int heartbeatState = LOW;
 int compState = LOW;
-int fanState = 0;
+int fanState = 3;
 unsigned long prevButtonMillis = 0;        // will store last time button was pressed
 unsigned long prevCompOnMillis = 0;        // will store last time comp was off
 unsigned long prevCompOffMillis = 0;        // will store last time comp was off
@@ -108,7 +108,7 @@ void loop() {
   uint8_t buttons = lcd.readButtons();
   
   if (buttons) {
-    if (currentMillis - prevButtonMillis >= 250 ) { // wait 250 ms between button presses
+    if (currentMillis - prevButtonMillis >= 100 ) { // wait 100 ms between button presses
       prevButtonMillis = currentMillis; // Remember the time
       
       if (buttons & BUTTON_LEFT) {
@@ -137,10 +137,14 @@ void loop() {
       }
     }
   }
-  
+  Serial.print(valueLR);
+  Serial.print(" ");
+  Serial.println(valueTB);
   switch (valueLR) {
     case 1:
       // Default Display
+      // zero up down button variable
+      valueTB = 0;
       lcd.setCursor(0, 0);
       lcd.print("Room ");
       lcd.print(avgRoomTemp);
@@ -148,31 +152,53 @@ void loop() {
       lcd.setCursor(0, 1);
       lcd.print("Evap ");
       lcd.print(avgEvapTemp);
-      lcd.print("F        ");      
+      lcd.print("F        ");
+      break;      
     case 2:
       // Room Temp High
+      if ((roomSetHigh > 32) && (valueTB < 0)){
+      roomSetHigh = roomSetHigh + valueTB;
+      valueTB = 0;
+      } else if ((roomSetHigh < 60) && (valueTB > 0)){
+      roomSetHigh = roomSetHigh + valueTB;
+      valueTB = 0;
+      }
       lcd.setCursor(0, 0);
       lcd.print("Room ");
       lcd.print(avgRoomTemp);
       lcd.print("F        ");
       lcd.setCursor(0, 1);
-      lcd.print("Set High");
+      lcd.print("Set High ");
       lcd.print(roomSetHigh);
-      lcd.print("F");
+      lcd.print("F        ");
       break;
     case 3:
       // Room Temp Low
+      if ((roomSetLow > 32) && (valueTB < 0)){
+      roomSetLow = roomSetLow + valueTB;
+      valueTB = 0;
+      } else if ((roomSetLow < 60) && (valueTB > 0)){
+      roomSetLow = roomSetLow + valueTB;
+      valueTB = 0;
+      }
       lcd.setCursor(0, 0);
       lcd.print("Room ");
       lcd.print(avgRoomTemp);
-      lcd.print("F");
+      lcd.print("F        ");
       lcd.setCursor(0, 1);
       lcd.print("Set Low ");
       lcd.print(roomSetLow);
-      lcd.print("F");
+      lcd.print("F        ");
       break;
     case 4:
       // Evap Temp High
+      if ((evapSetHigh > 10) && (valueTB < 0)){
+      evapSetHigh = evapSetHigh + valueTB;
+      valueTB = 0;
+      } else if ((evapSetHigh < 40) && (valueTB > 0)){
+      evapSetHigh = evapSetHigh + valueTB;
+      valueTB = 0;
+      }
       lcd.setCursor(0, 0);
       lcd.print("Evap ");
       lcd.print(avgEvapTemp);
@@ -180,21 +206,35 @@ void loop() {
       lcd.setCursor(0, 1);
       lcd.print("Set High ");
       lcd.print(evapSetHigh);
-      lcd.print("F");
+      lcd.print("F        ");
       break;    
     case 5:
       // Evap Temp Low
+      if ((evapSetLow > 10) && (valueTB < 0)){
+      evapSetLow = evapSetLow + valueTB;
+      valueTB = 0;
+      } else if ((evapSetLow < 40) && (valueTB > 0)){
+      evapSetLow = evapSetLow + valueTB;
+      valueTB = 0;
+      }
       lcd.setCursor(0, 0);
       lcd.print("Evap ");
       lcd.print(avgEvapTemp);
-      lcd.print("F");
+      lcd.print("F        ");
       lcd.setCursor(0, 1);
       lcd.print("Set Low ");
       lcd.print(evapSetLow);
-      lcd.print("F");
+      lcd.print("F        ");
       break;
     case 6:
       // Comp On Time
+      if ((compMinOnTime > 5) && (valueTB < 0)){
+      compMinOnTime = compMinOnTime + valueTB;
+      valueTB = 0;
+      } else if ((compMinOnTime < 180) && (valueTB > 0)){
+      compMinOnTime = compMinOnTime + valueTB;
+      valueTB = 0;
+      }
       lcd.setCursor(0, 0);
       lcd.print("Comp ");
       lcd.print(compOnTime);
@@ -202,10 +242,17 @@ void loop() {
       lcd.setCursor(0, 1);
       lcd.print(" Min On ");
       lcd.print(compMinOnTime);
-      lcd.print("Sec");
+      lcd.print("Sec      ");
       break;
     case 7:
       // Comp Off Time
+      if ((compMinOffTime > 5) && (valueTB < 0)){
+      compMinOffTime = compMinOffTime + valueTB;
+      valueTB = 0;
+      } else if ((compMinOffTime < 180) && (valueTB > 0)){
+      compMinOffTime = compMinOffTime + valueTB;
+      valueTB = 0;
+      }
       lcd.setCursor(0, 0);
       lcd.print("Comp ");
       lcd.print(compOffTime);
@@ -213,10 +260,36 @@ void loop() {
       lcd.setCursor(0, 1);
       lcd.print(" Min Off ");
       lcd.print(compMinOffTime);
-      lcd.print("Sec");
+      lcd.print("Sec      ");
       break;
     case 8:
-      // Set evap fan when room cool
+      // Idle Fan Speed 
+      if ((fanState > 0) && (valueTB < 0)){
+        fanState = fanState + valueTB;
+        valueTB = 0;
+      } else if ((fanState < 3) && (valueTB > 0)){
+        fanState = fanState + valueTB;
+        valueTB = 0;        
+      }
+      lcd.setCursor(0, 0);
+      lcd.print("Fan Idle Speed  ");
+      lcd.setCursor(0, 1);
+      lcd.print("Speed ");
+      switch(fanState) {
+        case 0:
+          lcd.print("Off");
+          break;
+        case 1:
+          lcd.print("Low");
+          break;
+        case 2:
+          lcd.print("Med");
+          break;
+        case 3:
+          lcd.print("High");
+          break;
+      }
+      lcd.print("          ");
       break;
       
   }
