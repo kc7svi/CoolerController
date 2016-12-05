@@ -85,6 +85,7 @@ void setup() {
   lcd.print("Hello Dave!");
   delay(5000);
   lcd.clear();
+  
 }
 
 uint8_t i=0;
@@ -380,7 +381,7 @@ float LPF(float input, int bufferSize, boolean initialize, int thermPin)  {
 
 #define bufferCap 50  //maximum buffer capacity
 
-  static float buffer[bufferCap][thermPin];
+  static float buffer[bufferCap][2];
   byte samples;
   float tempSum;
   float output;
@@ -396,7 +397,7 @@ float LPF(float input, int bufferSize, boolean initialize, int thermPin)  {
 
   // Push down the buffer Stack to discard oldest reading, making room for the new
   for ( int i=bufferSize - 2; i >= 0; i--) {
-    buffer[i+1] = buffer[i][thermPin];
+    buffer[i+1][thermPin] = buffer[i][thermPin];
   } // END For
 
   // Record the Current input value
