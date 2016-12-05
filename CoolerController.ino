@@ -48,8 +48,8 @@ int evapSetHigh = 33;
 int evapSetLow = 24;
 int compMinOnTime = 30;  // the minimum seconds the compressor must run before cycling off
 int compMinOffTime = 30;  // the minimum seconds the compressor must be off before cycling on
-int compTimeOn = 0;
-int compTimeOff = 0;
+int compOnTime = 0;
+int compOffTime = 0;
 
 
 unsigned long prevHeartbeatMillis = 0;        // will store last time heartbeat changed
@@ -57,8 +57,10 @@ int heartbeatState = LOW;
 int compState = LOW;
 int fanState = 0;
 unsigned long prevButtonMillis = 0;        // will store last time button was pressed
-unsigned long prevCompMillis = 0;        // will store last time comp was off
+unsigned long prevCompOnMillis = 0;        // will store last time comp was off
+unsigned long prevCompOffMillis = 0;        // will store last time comp was off
 unsigned long prevThermMillis = 0;        // will store last time thermistor was read
+unsigned long currentMillis = 0;        // will store last time thermistor was read
 float evapTempC;
 float evapTemp;
 float avgEvapTemp;
@@ -76,7 +78,7 @@ void setup() {
   pinMode(fanLowPin, OUTPUT);
   pinMode(fanMedPin, OUTPUT);
   pinMode(fanHighPin, OUTPUT);
-  analogReference(EXTERNAL)
+  analogReference(EXTERNAL);
   // set up the LCD's number of columns and rows: 
   lcd.begin(16, 2);
   lcd.setBacklight(0x1); // Turn on backlight
@@ -105,8 +107,8 @@ void loop() {
   uint8_t buttons = lcd.readButtons();
   
   if (buttons) {
-    if (currentMillis - previousButtonMillis >= 250 ) { // wait 250 ms between button presses
-      previousButtonMillis = currentMillis; // Remember the time
+    if (currentMillis - prevButtonMillis >= 250 ) { // wait 250 ms between button presses
+      prevButtonMillis = currentMillis; // Remember the time
       
       if (buttons & BUTTON_LEFT) {
         if (valueLR > 1) {
@@ -150,7 +152,7 @@ void loop() {
       // Room Temp High
       lcd.setCursor(0, 0);
       lcd.print("Room ");
-      lcd.print(roomDegF);
+      lcd.print(avgRoomTemp);
       lcd.print("F        ");
       lcd.setCursor(0, 1);
       lcd.print("Set High");
@@ -161,7 +163,7 @@ void loop() {
       // Room Temp Low
       lcd.setCursor(0, 0);
       lcd.print("Room ");
-      lcd.print(roomDegF);
+      lcd.print(avgRoomTemp);
       lcd.print("F");
       lcd.setCursor(0, 1);
       lcd.print("Set Low ");
@@ -172,7 +174,7 @@ void loop() {
       // Evap Temp High
       lcd.setCursor(0, 0);
       lcd.print("Evap ");
-      lcd.print(evapDegF);
+      lcd.print(avgEvapTemp);
       lcd.print("F        ");
       lcd.setCursor(0, 1);
       lcd.print("Set High ");
@@ -183,7 +185,7 @@ void loop() {
       // Evap Temp Low
       lcd.setCursor(0, 0);
       lcd.print("Evap ");
-      lcd.print(evapDegF);
+      lcd.print(avgEvapTemp);
       lcd.print("F");
       lcd.setCursor(0, 1);
       lcd.print("Set Low ");
@@ -194,7 +196,7 @@ void loop() {
       // Comp On Time
       lcd.setCursor(0, 0);
       lcd.print("Comp ");
-      lcd.print(compRunTimeOn);
+      lcd.print(compOnTime);
       lcd.print("Sec      ");
       lcd.setCursor(0, 1);
       lcd.print(" Min On ");
@@ -205,7 +207,7 @@ void loop() {
       // Comp Off Time
       lcd.setCursor(0, 0);
       lcd.print("Comp ");
-      lcd.print(compRunTimeOff);
+      lcd.print(compOffTime);
       lcd.print("Sec      ");
       lcd.setCursor(0, 1);
       lcd.print(" Min Off ");
@@ -214,6 +216,7 @@ void loop() {
       break;
     case 8:
       // Set evap fan when room cool
+      break;
       
   }
 
@@ -228,7 +231,7 @@ void loop() {
     }
     else if (avgEvapTemp < evapSetLow) { // if evap frozen
       if ((compState == HIGH) && (currentMillis - prevCompOnMillis >= (compMinOnTime * 1000))) { // if comp on and has been long enough
-        prevCompOnMillis = currentMillis
+        prevCompOnMillis = currentMillis;
         compState = LOW; // turn off compressor
         fanState = 3; // turn evap fan to high
         digitalWrite(compPin, compState);
@@ -236,8 +239,8 @@ void loop() {
     }     
   }
   else if (avgRoomTemp < roomSetLow) {
-    if ((compState == HIGH) && (currentMillis - previCompOnMillis >= (compMinOnTime * 1000))) { // if comp on and has been long enough
-      prevCompOnMillis = currentMillis
+    if ((compState == HIGH) && (currentMillis - prevCompOnMillis >= (compMinOnTime * 1000))) { // if comp on and has been long enough
+      prevCompOnMillis = currentMillis;
       compState = LOW; // turn off compressor
       fanState = 1; // turn evap fan to low
       digitalWrite(compPin, compState);
